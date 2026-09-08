@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบจัดสรรที่นั่งบัณฑิต</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#1c2321; --paper:#faf8f3; --line:#d8d2c4;
+    --red:#c0392b; --green:#27865a; --blue:#2b6cb0;
+    --soft:#efe9dc; --muted:#6b6459;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Segoe UI","Sarabun",system-ui,sans-serif;
+    background:var(--paper); color:var(--ink);
+    line-height:1.55; padding:32px 20px; max-width:1080px; margin:0 auto;
+  }
+  h1{font-size:1.9rem; font-weight:800; letter-spacing:-.5px; margin-bottom:4px}
+  .sub{color:var(--muted); margin-bottom:28px}
+  section{
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:22px 24px; margin-bottom:22px;
+  }
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:16px}
+  .sec-no{
+    font-size:.8rem; font-weight:700; color:#fff; background:var(--ink);
+    width:26px; height:26px; border-radius:7px; display:grid; place-items:center;
+    flex-shrink:0;
+  }
+  h2{font-size:1.2rem; font-weight:700}
+  table{width:100%; border-collapse:collapse; margin-top:6px; font-size:.95rem}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--soft)}
+  th{background:var(--soft); font-weight:700; font-size:.85rem}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums}
+  .zone-tag{display:inline-flex; align-items:center; gap:7px; font-weight:600}
+  .dot{width:11px; height:11px; border-radius:50%; display:inline-block}
+  .dot.red{background:var(--red)} .dot.green{background:var(--green)} .dot.blue{background:var(--blue)}
+  .zone-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  .zone-card{border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+  .zone-card .cap{font-size:1.7rem; font-weight:800; font-variant-numeric:tabular-nums}
+  .zone-card .lbl{font-size:.85rem; color:var(--muted)}
+  .zone-card .type{font-size:.78rem; margin-top:4px; color:var(--muted)}
+  .drop{
+    border:2px dashed var(--line); border-radius:10px; padding:26px;
+    text-align:center; color:var(--muted); cursor:pointer; transition:.15s;
+  }
+  .drop:hover{border-color:var(--blue); color:var(--blue); background:#f5f9fd}
+  .drop input{display:none}
+  .hint{font-size:.8rem; color:var(--muted); margin-top:8px}
+  button.calc{
+    background:var(--ink); color:#fff; border:none; padding:11px 22px;
+    border-radius:8px; font-size:.95rem; font-weight:600; cursor:pointer;
+  }
+  button.calc:hover{opacity:.88}
+  .empty{color:var(--muted); font-size:.9rem; padding:12px 0}
+  .total-row td{font-weight:700; background:var(--soft)}
+  .toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:6px}
+  .brk{font-size:.82rem; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap}
+  .brk input{cursor:pointer; vertical-align:middle}
+  tr.break-row td{border-bottom:2px solid var(--red)}
+</style>
+</head>
+<body>
+
+<h1>ระบบจัดสรรที่นั่งบัณฑิต</h1>
+<p class="sub">นำเข้าข้อมูลบัณฑิต แล้วคำนวณการจัดโซนที่นั่งตามลำดับการเข้ารับโดยอัตโนมัติ</p>
+
+<!-- SECTION 1 -->
+<section>
+  <div class="sec-head"><span class="sec-no">1</span><h2>ข้อมูลเก้าอี้ในโซน</h2></div>
+  <div class="zone-grid" id="zoneGrid"></div>
+</section>
+
+<!-- SECTION 2 -->
+<section>
+  <div class="sec-head"><span class="sec-no">2</span><h2>ข้อมูลบัณฑิต</h2></div>
+  <label class="drop" for="fileInput">
+    <div>📄 คลิกเพื่อเลือกไฟล์ Excel (.xlsx / .xls)</div>
+    <div class="hint">คอลัมน์: ลำดับการเข้ารับ · สำนักวิชา · จำนวนบัณฑิต · รอบการรับ</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </label>
+  <div id="gradTableWrap"></div>
+</section>
+
+<!-- SECTION 3 -->
+<section>
+  <div class="sec-head"><span class="sec-no">3</span><h2>ผลการจัดสรรบัณฑิตในแต่ละโซน</h2></div>
+  <div class="toolbar">
+    <button class="calc" id="calcBtn">คำนวณการจัดโซน</button>
+    <span class="hint">เส้นสีแดงใต้แถว = จุดพัก (ก่อนขึ้นรอบการโหลดถัดไป) ระบบคำนวณให้อัตโนมัติ</span>
+  </div>
+  <div id="resultWrap"><p class="empty">ยังไม่มีผลลัพธ์ — นำเข้าข้อมูลแล้วกดคำนวณ</p></div>
+</section>
+
+<script>
+// ---------- ส่วนที่ 1: ข้อมูลโซน (บันทึกไว้เพื่อคำนวณ) ----------
+const ZONES = [
+  { key:"red",   name:"โซนแดง",  capacity:342, type:"static",  color:"red"   },
+  { key:"green", name:"โซนเขียว", capacity:439, type:"Dynamic", color:"green" },
+  { key:"blue",  name:"โซนฟ้า",  capacity:494, type:"Dynamic", color:"blue"  },
+];
+
+// ---------- ส่วนที่ 2: ข้อมูลบัณฑิต (บันทึกไว้เพื่อคำนวณ) ----------
+let graduates = []; // { order, school, count, round }
+
+function renderZones(){
+  document.getElementById("zoneGrid").innerHTML = ZONES.map(z => `
+    <div class="zone-card">
+      <div class="zone-tag"><span class="dot ${z.color}"></span>${z.name}</div>
+      <div class="cap">${z.capacity.toLocaleString()}</div>
+      <div class="lbl">จำนวนเก้าอี้</div>
+      <div class="type">ประเภทพื้นที่: ${z.type}</div>
+    </div>`).join("");
+}
+
+// อ่านไฟล์ Excel
+document.getElementById("fileInput").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(new Uint8Array(ev.target.result), {type:"array"});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, blankrows:false});
+    parseRows(rows);
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function pick(header, keys){
+  for(let i=0;i<header.length;i++){
+    const h = String(header[i]||"").trim();
+    if(keys.some(k => h.includes(k))) return i;
+  }
+  return -1;
+}
+
+function parseRows(rows){
+  if(!rows.length) return;
+  const header = rows[0];
+  const iOrder  = pick(header, ["ลำดับ"]);
+  const iSchool = pick(header, ["สำนักวิชา","สำนัก"]);
+  const iCount  = pick(header, ["จำนวน"]);
+  const iRound  = pick(header, ["รอบ"]);
+
+  graduates = rows.slice(1)
+    .filter(r => r && r.length)
+    .map(r => ({
+      order:  Number(r[iOrder]) || 0,
+      school: String(r[iSchool] ?? "").trim(),
+      count:  Number(r[iCount]) || 0,
+      round:  String(r[iRound] ?? "").trim(),
+    }))
+    .filter(r => r.school !== "");
+
+  renderGradTable();
+  document.getElementById("resultWrap").innerHTML =
+    '<p class="empty">ข้อมูลพร้อมแล้ว — กดปุ่ม “คำนวณการจัดโซน”</p>';
+}
+
+// ตารางบัณฑิต: ลำดับการเข้ารับ · จำนวนบัณฑิต · รอบการรับ
+function renderGradTable(){
+  if(!graduates.length){ document.getElementById("gradTableWrap").innerHTML=""; return; }
+  const sorted = [...graduates].sort((a,b)=>a.order-b.order);
+  const total = graduates.reduce((s,g)=>s+g.count,0);
+  document.getElementById("gradTableWrap").innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="num">ลำดับการเข้ารับ</th>
+        <th>สำนักวิชา</th>
+        <th class="num">จำนวนบัณฑิต</th>
+        <th>รอบการรับ</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map(g=>`<tr>
+          <td class="num">${g.order}</td>
+          <td>${g.school}</td>
+          <td class="num">${g.count.toLocaleString()}</td>
+          <td>${g.round}</td>
+        </tr>`).join("")}
+        <tr class="total-row">
+          <td></td><td>รวม</td><td class="num">${total.toLocaleString()}</td><td></td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+// ---------- ส่วนที่ 3: คำนวณการจัดโซนอัตโนมัติ ----------
+// ตรรกะ:
+//  - โซนแดงนั่งอยู่กับที่ตลอด (ใช้ครั้งเดียว ไม่ลุก)
+//  - เขียว+ฟ้า คือที่นั่งหมุนเวียน คนลุกไปรับแล้วเอาคนใหม่มาเติม
+//  - คนที่ "ลุกไปรับ" ได้ = คนที่อยู่ในรอบการรับปัจจุบันเท่านั้น (รอบ 1 ก่อน แล้วรอบ 2 ...)
+//  - แต่ละยกโหลด (minor) เติมคนใหม่ได้ = จำนวนที่ว่าง (คนที่เพิ่งลุกไปในยกก่อนหน้า)
+//  - minor +1 ทุกครั้งที่ขึ้นยกโหลดใหม่
+//  - พัก (major +1, minor รีเซ็ต 0) เมื่อ: ที่นั่งเต็ม แต่คนในห้องยังลุกไม่ได้
+//    (ไม่มีคนรอบปัจจุบันเหลือให้ลุก) ต้องรอรอบถัดไปเริ่มลุกก่อน
+
+function allocate(){
+  const queue = [...graduates].sort((a,b)=>a.order-b.order)
+    .map(g=>({ order:g.order, school:g.school, round:String(g.round), left:g.count }));
+
+  const RED   = ZONES.find(z=>z.key==="red");
+  const GREEN = ZONES.find(z=>z.key==="green");
+  const BLUE  = ZONES.find(z=>z.key==="blue");
+  const rotating = GREEN.capacity + BLUE.capacity; // ที่นั่งหมุนเวียน 933
+
+  const rows = [];
+  let qi = 0;
+  let major = 1, minor = 0;
+
+  // seated = คนที่นั่งในเขียว+ฟ้าตอนนี้ [{round, count}]
+  // leavingRound = รอบการรับที่ "กำลังลุกไปรับ" อยู่ (คนรอบนี้เท่านั้นที่ลุกได้)
+  let seated = [];
+
+  // ---- ยกแรก (1.0): แดง(นั่งกับที่) + เขียว + ฟ้า ----
+  fillZone(RED, RED.capacity);
+  seated = fillRotating(rotating);
+  let leavingRound = seated.length ? minRoundOf(seated) : null;
+
+  // ---- วนลุก-เติม ----
+  let justBroke = false; // เพิ่งพัก → การเติมชุดถัดไปเป็น minor 0 (ไม่ +1)
+  while(qi < queue.length){
+    // จำนวนคน "รอบที่กำลังลุก" ที่ยังนั่งอยู่ → ลุกได้เท่านี้
+    const canLeave = seated.filter(s=>s.round===leavingRound)
+                           .reduce((a,s)=>a+s.count,0);
+
+    if(canLeave > 0){
+      // มีคนรอบปัจจุบันลุก → เติม = canLeave
+      if(justBroke){ justBroke = false; }  // ชุดแรกหลังพัก = minor 0
+      else { minor++; }                    // ยกถัดไปตามปกติ minor +1
+      seated = seated.filter(s=>s.round!==leavingRound); // คนรอบนี้ลุกออก
+      const filled = fillRotating(canLeave);
+      seated = seated.concat(filled);
+    } else {
+      // คนรอบปัจจุบันลุกหมดแล้ว เหลือแต่รอบถัดไป → พัก
+      if(seated.length === 0) break;
+      major++; minor = 0;
+      justBroke = true;
+      leavingRound = minRoundOf(seated); // รอบถัดไปเริ่มลุกได้
+    }
+  }
+
+  rows.forEach(r=> r.load = `${r.major}.${r.minor}`);
+  return rows;
+
+  // ---- helpers ----
+  function minRoundOf(arr){
+    return arr.reduce((m,s)=> s.round<m ? s.round : m, arr[0].round);
+  }
+  function fillZone(zone, cap){
+    let room = cap;
+    while(room>0 && qi<queue.length){
+      const q = queue[qi];
+      const take = Math.min(room, q.left);
+      rows.push({ order:q.order, school:q.school, round:q.round, zone, count:take, major, minor });
+      q.left -= take; room -= take;
+      if(q.left===0) qi++;
+    }
+  }
+  // เติมที่นั่งหมุนเวียน cap ที่ (เขียวก่อน แล้วฟ้า) คืน [{round,count}]
+  function fillRotating(cap){
+    const placed = [];
+    let gRoom = Math.min(cap, GREEN.capacity);
+    let bRoom = cap - gRoom;
+    for(const [zone, zr] of [[GREEN,gRoom],[BLUE,bRoom]]){
+      let r = zr;
+      while(r>0 && qi<queue.length){
+        const q = queue[qi];
+        const take = Math.min(r, q.left);
+        rows.push({ order:q.order, school:q.school, round:q.round, zone, count:take, major, minor });
+        placed.push({ round:q.round, count:take });
+        q.left -= take; r -= take;
+        if(q.left===0) qi++;
+      }
+    }
+    return placed;
+  }
+}
+
+function renderResult(){
+  const rows = allocate();
+  const total = rows.reduce((s,r)=>s+r.count,0);
+
+  document.getElementById("resultWrap").innerHTML = `
+    <table>
+      <thead><tr>
+        <th class="num">ลำดับ</th>
+        <th>สำนักวิชา</th>
+        <th>รอบการรับ</th>
+        <th>โซนที่นั่ง</th>
+        <th class="num">จำนวนบัณฑิต</th>
+        <th class="num">รอบการโหลด</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i)=>{
+          // ขีดเส้นใต้เข้มเมื่อ major กำลังจะเปลี่ยน (จุดพัก)
+          const next = rows[i+1];
+          const isBreak = next && next.major !== r.major;
+          return `<tr class="${isBreak?'break-row':''}">
+            <td class="num">${r.order}</td>
+            <td>${r.school}</td>
+            <td>${r.round}</td>
+            <td><span class="zone-tag"><span class="dot ${r.zone.color}"></span>${r.zone.name}</span></td>
+            <td class="num">${r.count.toLocaleString()}</td>
+            <td class="num">${r.load}</td>
+          </tr>`;
+        }).join("")}
+        <tr class="total-row">
+          <td></td><td>รวม</td><td></td><td></td><td class="num">${total.toLocaleString()}</td><td></td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
+document.getElementById("calcBtn").addEventListener("click", ()=>{
+  if(!graduates.length){
+    document.getElementById("resultWrap").innerHTML =
+      '<p class="empty">กรุณานำเข้าข้อมูลบัณฑิตก่อน</p>';
+    return;
+  }
+  renderResult();
+});
+
+renderZones();
+</script>
+</body>
+</html>
