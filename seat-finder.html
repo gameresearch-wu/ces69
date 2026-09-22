@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ค้นหาที่นั่งบัณฑิต</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+  onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);"></script>
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    --paper:#F3EFE9;--card:#FBF9F5;--ink:#241a26;--muted:#6f6472;--line:#e2dad0;
+    --curtain:#8a2436;--curtain-soft:#f3e0e2;--brass:#b07d2a;--stage:#efe7dc;
+    --ok:#3f7d4e;--warn:#b45309;--shadow:22 12 26;
+  }
+  *,*::before,*::after{box-sizing:inherit;}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#181119;--card:#221826;--ink:#f2e9ef;--muted:#a596a8;--line:#3a2c3e;
+      --curtain:#c15367;--curtain-soft:#3a2029;--brass:#d6a24a;--stage:#241a26;
+      --ok:#6fbf82;--warn:#e0a145;--shadow:0 0 0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#181119;--card:#221826;--ink:#f2e9ef;--muted:#a596a8;--line:#3a2c3e;
+    --curtain:#c15367;--curtain-soft:#3a2029;--brass:#d6a24a;--stage:#241a26;
+    --ok:#6fbf82;--warn:#e0a145;--shadow:0 0 0;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100%;}
+  .wrap{max-width:700px;margin:0 auto;padding:clamp(20px,4vw,44px) clamp(16px,4vw,28px) 64px;}
+  header{margin-bottom:20px;}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;font-weight:600;color:var(--curtain);margin-bottom:10px;}
+  .kicker .dot{width:8px;height:8px;border-radius:50%;background:var(--curtain);flex:none;}
+  h1{font-size:clamp(1.6rem,5vw,2.3rem);font-weight:700;margin:0 0 6px;letter-spacing:-.01em;line-height:1.15;}
+  .sub{color:var(--muted);font-size:1rem;margin:0;max-width:52ch;}
+
+  /* import bar */
+  .import{margin:22px 0 8px;border:1.5px dashed var(--line);border-radius:14px;background:var(--stage);padding:16px 16px 14px;}
+  .import .top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .import button{appearance:none;border:0;cursor:pointer;font-family:inherit;font-size:.98rem;font-weight:600;color:#fff;background:var(--curtain);padding:12px 18px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;transition:filter .15s;}
+  .import button:hover{filter:brightness(1.06);}
+  .import .status{font-size:.9rem;color:var(--muted);flex:1;min-width:180px;}
+  .import .status b{color:var(--ink);font-weight:600;}
+  .import .status.bad b,.import .status.bad{color:var(--curtain);}
+  .import .cols{margin-top:10px;font-size:.82rem;color:var(--muted);}
+  .import .cols code{font-family:"IBM Plex Mono",monospace;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.82rem;color:var(--ink);}
+
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--stage);border:1px solid var(--line);border-radius:14px;padding:4px;margin:16px 0 18px;}
+  .tab{appearance:none;border:0;background:transparent;cursor:pointer;font-family:inherit;font-size:.9rem;font-weight:600;color:var(--muted);padding:11px 6px;border-radius:10px;transition:background .18s,color .18s;}
+  .tab[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgb(var(--shadow)/.14);}
+  .panel{display:none;} .panel.active{display:block;}
+
+  label.fld{display:block;font-size:.92rem;font-weight:600;margin:0 0 8px;color:var(--ink);}
+  .hint{color:var(--muted);font-weight:400;}
+  .col{display:flex;flex-direction:column;gap:10px;}
+  .row2{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;}
+  input[type="number"],input[type="text"]{flex:1 1 120px;min-width:0;font-family:inherit;font-size:1.12rem;font-weight:600;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;outline:none;transition:border-color .15s;}
+  select{flex:1 1 100%;font-family:inherit;font-size:1.05rem;font-weight:600;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;outline:none;transition:border-color .15s;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a2436' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:44px;}
+  input:focus,select:focus{border-color:var(--curtain);}
+  .w-row{max-width:74px;flex:0 0 74px;} .w-round{max-width:88px;flex:0 0 88px;}
+  button.go{appearance:none;border:0;cursor:pointer;font-family:inherit;font-size:1.02rem;font-weight:600;color:#fff;background:var(--curtain);padding:14px 24px;border-radius:12px;transition:filter .15s,transform .05s;flex:none;}
+  button.go:hover{filter:brightness(1.06);} button.go:active{transform:translateY(1px);}
+  button.go:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible,.import button:focus-visible{outline:3px solid var(--brass);outline-offset:2px;}
+
+  .ticket{margin-top:22px;border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:var(--card);display:none;}
+  .ticket.show{display:block;animation:rise .32s ease both;}
+  @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion:reduce){.ticket.show{animation:none;}}
+  .ticket-top{background:var(--curtain);color:#fff;padding:15px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .ticket-top .lbl{font-size:.95rem;font-weight:500;flex:1;min-width:0;}
+  .ticket-top .lbl b{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.05rem;}
+  .ticket-top .round{font-size:1.15rem;font-weight:700;font-family:"IBM Plex Mono",monospace;white-space:nowrap;}
+  .ticket-body{padding:24px 20px 26px;text-align:center;position:relative;}
+  .ticket-body::before{content:"";position:absolute;top:-11px;left:0;right:0;height:22px;background:radial-gradient(circle at center,transparent 0 10px,var(--card) 10px) repeat-x;background-size:22px 22px;background-position:center top;}
+  .seat-code{font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:clamp(2.8rem,14vw,4.4rem);line-height:1;color:var(--ink);letter-spacing:.02em;margin:4px 0 12px;}
+  .answer{font-size:1.05rem;font-weight:600;color:var(--curtain);margin:0 0 16px;line-height:1.4;}
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(66px,1fr));gap:10px;border-top:1px dashed var(--line);padding-top:18px;}
+  .meta .cell .k{font-size:.78rem;color:var(--muted);margin-bottom:3px;}
+  .meta .cell .v{font-size:1.2rem;font-weight:700;color:var(--curtain);font-family:"IBM Plex Mono",monospace;}
+  .ticket.bad .ticket-top{background:var(--warn);}
+
+  .err{display:none;margin-top:18px;padding:14px 16px;border-radius:12px;background:var(--curtain-soft);color:var(--curtain);font-weight:500;font-size:.95rem;border:1px solid var(--line);}
+  .err.show{display:block;}
+
+  /* overview */
+  .rd-card{border:1.5px solid var(--line);border-radius:14px;background:var(--card);padding:16px 18px;margin-bottom:14px;}
+  .rd-card h3{margin:0 0 4px;font-size:1.1rem;font-weight:700;}
+  .rd-card .cap{font-size:.9rem;font-weight:600;font-family:"IBM Plex Mono",monospace;}
+  .rd-card .cap.ok{color:var(--ok);} .rd-card .cap.warn{color:var(--warn);}
+  .rd-card .zone{font-size:.85rem;color:var(--muted);margin:0 0 10px;}
+  .rd-card ul{margin:0;padding:0;list-style:none;}
+  .rd-card li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--line);font-size:.92rem;}
+  .rd-card li .nm{min-width:0;}
+  .rd-card li .rg{font-family:"IBM Plex Mono",monospace;color:var(--muted);white-space:nowrap;font-size:.85rem;}
+
+  footer{margin-top:30px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:.88rem;}
+  footer b{color:var(--ink);font-weight:600;}
+  footer p{margin:0 0 8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="kicker"><span class="dot"></span>ผังที่นั่งพิธีพระราชทานปริญญาบัตร</span>
+    <h1>ค้นหาที่นั่งบัณฑิต</h1>
+    <p class="sub">เลือกสำนักวิชาและลำดับบัณฑิต ระบบจะบอกรอบ แถว โซน และหมายเลขเก้าอี้ให้ นำเข้าไฟล์ Excel เพื่อเปลี่ยนข้อมูลของแต่ละวันได้</p>
+  </header>
+
+  <div class="import">
+    <div class="top">
+      <button id="btn-import" type="button">📄 นำเข้าไฟล์ Excel</button>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+      <div class="status" id="imp-status">กำลังโหลด…</div>
+    </div>
+    <div class="cols">ไฟล์ต้องมีคอลัมน์: <code>ลำดับ</code> <code>สำนักวิชา</code> <code>จำนวนบัณฑิต</code> <code>รอบการรับ</code></div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tab-fac" role="tab" aria-selected="true" aria-controls="panel-fac">สำนักวิชา</button>
+    <button class="tab" id="tab-rev" role="tab" aria-selected="false" aria-controls="panel-rev">ที่นั่ง</button>
+    <button class="tab" id="tab-ovw" role="tab" aria-selected="false" aria-controls="panel-ovw">สรุปรอบ</button>
+  </div>
+
+  <!-- สำนักวิชา -> ที่นั่ง -->
+  <section class="panel active" id="panel-fac" role="tabpanel" aria-labelledby="tab-fac">
+    <label class="fld" for="fac-sel">สำนักวิชา และลำดับบัณฑิตในสำนักวิชา</label>
+    <div class="col">
+      <select id="fac-sel"></select>
+      <div class="row2">
+        <input type="number" id="fac-n" inputmode="numeric" min="1" placeholder="คนที่ (เช่น 3)" autocomplete="off">
+        <button class="go" id="btn-fac">ค้นหา</button>
+      </div>
+    </div>
+    <div class="err" id="err-fac"></div>
+    <div class="ticket" id="ticket-fac">
+      <div class="ticket-top">
+        <span class="lbl" id="fout-title">—</span>
+        <span class="round" id="fout-round">รอบ 1</span>
+      </div>
+      <div class="ticket-body">
+        <div class="seat-code" id="fout-code">—</div>
+        <div class="meta">
+          <div class="cell"><div class="k">แถว</div><div class="v" id="fout-row">—</div></div>
+          <div class="cell"><div class="k">โซน</div><div class="v" id="fout-zone">—</div></div>
+          <div class="cell"><div class="k">เก้าอี้</div><div class="v" id="fout-seat">—</div></div>
+          <div class="cell"><div class="k">ลำดับในรอบ</div><div class="v" id="fout-pos">—</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ที่นั่ง -> สำนักวิชา -->
+  <section class="panel" id="panel-rev" role="tabpanel" aria-labelledby="tab-rev">
+    <label class="fld" for="rev-row">ที่นั่ง <span class="hint">(แถว + เก้าอี้ + รอบ)</span></label>
+    <div class="row2">
+      <input class="w-row" type="text" id="rev-row" maxlength="1" placeholder="แถว" autocomplete="off">
+      <input type="number" id="rev-seat" inputmode="numeric" min="1" placeholder="เก้าอี้" autocomplete="off">
+      <input class="w-round" type="number" id="rev-round" inputmode="numeric" min="1" value="1" placeholder="รอบ" autocomplete="off">
+      <button class="go" id="btn-rev">ค้นหา</button>
+    </div>
+    <div class="err" id="err-rev"></div>
+    <div class="ticket" id="ticket-rev">
+      <div class="ticket-top">
+        <span class="lbl">เก้าอี้ <b id="rout-code">—</b></span>
+        <span class="round" id="rout-roundlbl">รอบ 1</span>
+      </div>
+      <div class="ticket-body">
+        <div class="seat-code" id="rout-code2">—</div>
+        <div class="answer" id="rout-ans">—</div>
+        <div class="meta">
+          <div class="cell"><div class="k">โซน</div><div class="v" id="rout-zone">—</div></div>
+          <div class="cell"><div class="k">ลำดับในรอบ</div><div class="v" id="rout-pos">—</div></div>
+          <div class="cell"><div class="k">รอบ</div><div class="v" id="rout-rd">—</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- สรุปรอบ -->
+  <section class="panel" id="panel-ovw" role="tabpanel" aria-labelledby="tab-ovw">
+    <div id="ovw"></div>
+  </section>
+
+  <footer>
+    <p><b>กติกาที่นั่ง</b> — รอบ 1 ใช้แถว C–Y (1,275 ที่นั่ง เริ่ม C01) · รอบ 2 เป็นต้นไปใช้แถว I–Y (933 ที่นั่ง เริ่ม I01) แต่ละรอบเริ่มนับเก้าอี้ใหม่</p>
+    <p id="src-note"></p>
+  </footer>
+</div>
+
+<script>
+/* ================= ผังที่นั่ง ================= */
+const DATA = [
+  ["C",1,1,13,13],["C",2,14,26,13],["C",3,27,39,13],["C",4,40,52,13],
+  ["D",1,1,13,13],["D",2,14,26,13],["D",3,27,39,13],["D",4,40,52,13],
+  ["E",1,1,14,14],["E",2,15,28,14],["E",3,29,42,14],["E",4,43,56,14],
+  ["F",1,1,15,15],["F",2,16,30,15],["F",3,31,45,15],["F",4,46,60,15],
+  ["G",1,1,15,15],["G",2,16,30,15],["G",3,31,45,15],["G",4,46,60,15],
+  ["H",1,1,15,15],["H",2,16,31,16],["H",3,32,47,16],["H",4,48,62,15],
+  ["I",1,1,14,14],["I",2,15,31,17],["I",3,32,48,17],["I",4,49,62,14],
+  ["J",1,1,13,13],["J",2,14,30,17],["J",3,31,47,17],["J",4,48,60,13],
+  ["K",1,1,13,13],["K",2,14,31,18],["K",3,32,49,18],["K",4,50,62,13],
+  ["L",1,1,13,13],["L",2,14,32,19],["L",3,33,51,19],["L",4,52,64,13],
+  ["M",1,1,13,13],["M",2,14,32,19],["M",3,33,51,19],["M",4,52,64,13],
+  ["N",1,1,12,12],["N",2,13,32,20],["N",3,33,52,20],["N",4,53,64,12],
+  ["O",1,1,11,11],["O",2,12,31,20],["O",3,33,53,21],["O",4,54,64,11],
+  ["P",5,1,23,23],["P",6,24,36,13],["P",7,37,59,23],
+  ["Q",5,1,22,22],["Q",6,23,35,13],["Q",7,36,57,22],
+  ["R",5,1,21,21],["R",6,22,35,14],["R",7,36,56,21],
+  ["S",5,1,20,20],["S",6,21,34,14],["S",7,35,54,20],
+  ["T",5,1,18,18],["T",6,19,33,15],["T",7,34,51,18],
+  ["U",5,1,16,16],["U",6,17,31,15],["U",7,32,47,16],
+  ["V",5,1,13,13],["V",6,14,29,16],["V",7,30,42,13],
+  ["W",5,1,13,13],["W",6,14,36,23],["W",7,37,49,13],
+  ["X",5,1,10,10],["X",6,11,33,23],["X",7,34,43,10],
+  ["Y",5,1,6,6],["Y",6,7,30,24],["Y",7,31,36,6],
+];
+const pad2 = n => String(n).padStart(2, "0");
+const th = n => n.toLocaleString("th-TH");
+
+const ZONES = [];
+let cum = 0;
+for (const [row, zone, first, last, count] of DATA) {
+  ZONES.push({ row, zone, first, last, count, start: cum + 1, end: cum + count });
+  cum += count;
+}
+const ROUND1_TOTAL = cum;                       // 1275 (แถว C–Y)
+const R2_ROWS = new Set(["I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y"]);
+const ZONES_R2 = [];
+let cum2 = 0;
+for (const z of ZONES) if (R2_ROWS.has(z.row)) { ZONES_R2.push({ ...z, rstart: cum2 + 1, rend: cum2 + z.count }); cum2 += z.count; }
+const ROUND_N_TOTAL = cum2;                     // 933 (แถว I–Y)
+
+const capOf = round => round === 1 ? ROUND1_TOTAL : ROUND_N_TOTAL;
+const rowsOf = round => round === 1 ? "C–Y" : "I–Y";
+
+/* ตำแหน่งในรอบ -> ที่นั่ง */
+function seatInRound(round, pos) {
+  if (round === 1) {
+    if (pos < 1 || pos > ROUND1_TOTAL) return null;
+    for (const z of ZONES) if (pos >= z.start && pos <= z.end)
+      return { row: z.row, zone: z.zone, seat: z.first + (pos - z.start), code: z.row + pad2(z.first + (pos - z.start)) };
+  } else {
+    if (pos < 1 || pos > ROUND_N_TOTAL) return null;
+    for (const z of ZONES_R2) if (pos >= z.rstart && pos <= z.rend)
+      return { row: z.row, zone: z.zone, seat: z.first + (pos - z.rstart), code: z.row + pad2(z.first + (pos - z.rstart)) };
+  }
+  return null;
+}
+/* ที่นั่ง -> ตำแหน่งในรอบ */
+function posFromSeat(round, rowLetter, seat) {
+  if (round === 1) {
+    for (const z of ZONES) if (z.row === rowLetter && seat >= z.first && seat <= z.last)
+      return { pos: z.start + (seat - z.first), zone: z.zone };
+  } else {
+    if (!R2_ROWS.has(rowLetter)) return { blocked: true };
+    for (const z of ZONES_R2) if (z.row === rowLetter && seat >= z.first && seat <= z.last)
+      return { pos: z.rstart + (seat - z.first), zone: z.zone };
+  }
+  return null;
+}
+
+/* ================= ข้อมูลสำนักวิชา ================= */
+const DEFAULT_FACULTIES = [
+  ["บัณฑิตศึกษา",38],["รัฐศาสตร์และรัฐประศาสนศาสตร์",280],["วิทยาศาสตร์",57],
+  ["วิศวกรรมศาสตร์และเทคโนโลยี",307],["ศิลปศาสตร์",205],["สถาปัตยกรรมศาสตร์และการออกแบบ",75],
+  ["สหเวชศาสตร์",290],["สาธารณสุขศาสตร์",219],["สารสนเทศศาสตร์",260],
+  ["วิทยาลัยสัตวแพทยศาสตร์อัครราชกุมารี",20],["การจัดการ",253],["การบัญชีและการเงิน",157],
+  ["วิทยาลัยทันตแพทยศาสตร์นานาชาติ",3],["เทคโนโลยีการเกษตรและอุตสาหกรรมอาหาร",42],
+  ["พยาบาลศาสตร์",147],["แพทยศาสตร์",138],["เภสัชศาสตร์",114],["นิติศาสตร์",158],
+];
+
+const state = { faculties: [], rounds: {}, autoRounds: false, source: "ตัวอย่าง" };
+
+/* จัดกลุ่มรอบ + คำนวณตำแหน่งเริ่มของแต่ละสำนักวิชาในรอบ */
+function rebuild(list) {
+  const hasRounds = list.length > 0 && list.every(o => o.round != null && o.round >= 1);
+  const items = list.slice().sort((a, b) => a.order - b.order);
+  if (!hasRounds) {
+    let round = 1, cap = capOf(1), fill = 0;
+    for (const it of items) {
+      if (fill > 0 && fill + it.count > cap) { round++; cap = capOf(round); fill = 0; }
+      it.round = round; fill += it.count;
+    }
+  }
+  const rounds = {};
+  for (const it of items) {
+    if (!rounds[it.round]) rounds[it.round] = { facs: [], total: 0 };
+    const g = rounds[it.round];
+    it.startPos = g.total + 1;
+    g.facs.push(it);
+    g.total += it.count;
+  }
+  state.faculties = items;
+  state.rounds = rounds;
+  state.autoRounds = !hasRounds;
+}
+
+/* ================= UI ================= */
+const $ = id => document.getElementById(id);
+
+const TABS = ["fac","rev","ovw"];
+function selectTab(which){ for (const t of TABS){ $("tab-"+t).setAttribute("aria-selected", t===which); $("panel-"+t).classList.toggle("active", t===which); } }
+$("tab-fac").addEventListener("click", () => selectTab("fac"));
+$("tab-rev").addEventListener("click", () => selectTab("rev"));
+$("tab-ovw").addEventListener("click", () => selectTab("ovw"));
+
+function fillSelect(){
+  const sel = $("fac-sel"); sel.innerHTML = "";
+  state.faculties.forEach((f, i) => {
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = `${f.name} · ${th(f.count)} คน · รอบ ${f.round}`;
+    sel.appendChild(o);
+  });
+}
+
+function renderOverview(){
+  const box = $("ovw"); box.innerHTML = "";
+  const rks = Object.keys(state.rounds).map(Number).sort((a,b)=>a-b);
+  for (const rd of rks){
+    const g = state.rounds[rd];
+    const cap = capOf(rd);
+    const over = g.total - cap;
+    const card = document.createElement("div"); card.className = "rd-card";
+    const status = over > 0 ? `เกิน ${th(over)} ที่นั่ง` : `เหลือ ${th(cap - g.total)} ที่นั่ง`;
+    let li = "";
+    for (const f of g.facs){
+      const endPos = f.startPos + f.count - 1;
+      li += `<li><span class="nm">${f.name}</span><span class="rg">${th(f.count)} คน · ตำแหน่ง ${th(f.startPos)}–${th(endPos)}</span></li>`;
+    }
+    card.innerHTML =
+      `<h3>รอบ ${rd} <span class="cap ${over>0?'warn':'ok'}">${th(g.total)}/${th(cap)} — ${status}</span></h3>`+
+      `<p class="zone">ใช้แถว ${rowsOf(rd)}${over>0?' ⚠ เกินความจุของรอบนี้':''}</p>`+
+      `<ul>${li}</ul>`;
+    box.appendChild(card);
+  }
+  if (!rks.length) box.innerHTML = `<p style="color:var(--muted)">ยังไม่มีข้อมูล</p>`;
+}
+
+function refreshAll(){ fillSelect(); renderOverview();
+  const auto = state.autoRounds ? " · รอบจัดอัตโนมัติ (นำเข้าไฟล์ที่มีคอลัมน์ ‘รอบการรับ’ เพื่อกำหนดเอง)" : "";
+  const totalGrads = state.faculties.reduce((s,f)=>s+f.count,0);
+  $("src-note").innerHTML = `<b>ข้อมูลปัจจุบัน:</b> ${state.source} · ${state.faculties.length} สำนักวิชา · ${th(totalGrads)} คน${auto}`;
+}
+
+/* ---- สำนักวิชา -> ที่นั่ง ---- */
+function runFac(){
+  const i = Number($("fac-sel").value);
+  const nRaw = $("fac-n").value.trim();
+  const err = $("err-fac"), tk = $("ticket-fac");
+  err.classList.remove("show"); tk.classList.remove("show"); tk.classList.remove("bad");
+  const f = state.faculties[i];
+  if (!f) { err.textContent = "ยังไม่มีข้อมูลสำนักวิชา"; err.classList.add("show"); return; }
+  if (nRaw === "") { err.textContent = "กรุณากรอกลำดับคนในสำนักวิชา"; err.classList.add("show"); return; }
+  const n = Number(nRaw);
+  if (!Number.isInteger(n) || n < 1) { err.textContent = "ลำดับต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป"; err.classList.add("show"); return; }
+  if (n > f.count) { err.textContent = `${f.name} มีบัณฑิต ${th(f.count)} คน (กรอกได้ 1–${th(f.count)})`; err.classList.add("show"); return; }
+  const pos = f.startPos + (n - 1);
+  const s = seatInRound(f.round, pos);
+  $("fout-title").innerHTML = `${f.name} · คนที่ <b>${th(n)}</b>`;
+  $("fout-round").textContent = "รอบ " + f.round;
+  if (!s) {
+    tk.classList.add("bad");
+    $("fout-code").textContent = "เกินความจุ";
+    $("fout-row").textContent = "—"; $("fout-zone").textContent = "—"; $("fout-seat").textContent = "—";
+    $("fout-pos").textContent = th(pos);
+    void tk.offsetWidth; tk.classList.add("show");
+    return;
+  }
+  $("fout-code").textContent = s.code;
+  $("fout-row").textContent = s.row;
+  $("fout-zone").textContent = s.zone;
+  $("fout-seat").textContent = pad2(s.seat);
+  $("fout-pos").textContent = th(pos);
+  void tk.offsetWidth; tk.classList.add("show");
+}
+$("btn-fac").addEventListener("click", runFac);
+$("fac-n").addEventListener("keydown", e => { if (e.key === "Enter") runFac(); });
+
+/* ---- ที่นั่ง -> สำนักวิชา ---- */
+function runRev(){
+  const rowLetter = $("rev-row").value.trim().toUpperCase();
+  const seatRaw = $("rev-seat").value.trim();
+  const roundRaw = $("rev-round").value.trim();
+  const err = $("err-rev"), tk = $("ticket-rev");
+  err.classList.remove("show"); tk.classList.remove("show");
+  if (!rowLetter || seatRaw === "") { err.textContent = "กรุณากรอกทั้งแถวและหมายเลขเก้าอี้"; err.classList.add("show"); return; }
+  const seat = Number(seatRaw);
+  const round = roundRaw === "" ? 1 : Number(roundRaw);
+  if (!Number.isInteger(seat) || seat < 1) { err.textContent = "หมายเลขเก้าอี้ต้องเป็นจำนวนเต็มบวก"; err.classList.add("show"); return; }
+  if (!Number.isInteger(round) || round < 1) { err.textContent = "รอบต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป"; err.classList.add("show"); return; }
+  const pr = posFromSeat(round, rowLetter, seat);
+  if (pr && pr.blocked) { err.textContent = `รอบ ${round} ใช้เฉพาะแถว I–Y (แถว ${rowLetter} มีเฉพาะรอบ 1)`; err.classList.add("show"); return; }
+  if (!pr) { err.textContent = `ไม่พบเก้าอี้ ${rowLetter}${pad2(seat)} ในผังที่นั่ง`; err.classList.add("show"); return; }
+  // หาสำนักวิชาในรอบนั้น
+  const g = state.rounds[round];
+  let hit = null;
+  if (g) for (const f of g.facs) if (pr.pos >= f.startPos && pr.pos <= f.startPos + f.count - 1) { hit = { f, person: pr.pos - f.startPos + 1 }; break; }
+  $("rout-code").textContent = rowLetter + pad2(seat);
+  $("rout-roundlbl").textContent = "รอบ " + round;
+  $("rout-code2").textContent = rowLetter + pad2(seat);
+  $("rout-zone").textContent = pr.zone;
+  $("rout-pos").textContent = th(pr.pos);
+  $("rout-rd").textContent = round;
+  $("rout-ans").textContent = hit ? `${hit.f.name} · คนที่ ${th(hit.person)}` : "เก้าอี้นี้ยังไม่มีบัณฑิตนั่ง (เกินจำนวนที่จัดในรอบนี้)";
+  void tk.offsetWidth; tk.classList.add("show");
+}
+$("btn-rev").addEventListener("click", runRev);
+$("rev-seat").addEventListener("keydown", e => { if (e.key === "Enter") $("rev-round").focus(); });
+$("rev-round").addEventListener("keydown", e => { if (e.key === "Enter") runRev(); });
+$("rev-row").addEventListener("keydown", e => { if (e.key === "Enter") $("rev-seat").focus(); });
+
+/* ---- นำเข้า Excel ---- */
+$("btn-import").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", ev => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const st = $("imp-status");
+  if (typeof XLSX === "undefined") { st.className = "status bad"; st.innerHTML = "ตัวอ่านไฟล์ยังโหลดไม่เสร็จ ลองกดใหม่อีกครั้ง"; return; }
+  st.className = "status"; st.textContent = "กำลังอ่านไฟล์…";
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      let hi = -1;
+      for (let r = 0; r < rows.length; r++) {
+        const j = rows[r].map(c => String(c)).join("|");
+        if (j.includes("สำนัก") || j.includes("จำนวน")) { hi = r; break; }
+      }
+      if (hi < 0) throw new Error("ไม่พบหัวตาราง (ต้องมีคอลัมน์ สำนักวิชา / จำนวนบัณฑิต)");
+      const header = rows[hi].map(c => String(c).trim());
+      const findCol = (...keys) => header.findIndex(h => keys.some(k => h.includes(k)));
+      const cOrder = findCol("ลำดับ");
+      const cName  = findCol("สำนัก", "วิชา");
+      const cCount = findCol("จำนวน");
+      const cRound = findCol("รอบ");
+      if (cName < 0 || cCount < 0) throw new Error("ต้องมีคอลัมน์ สำนักวิชา และ จำนวนบัณฑิต");
+      const toInt = v => { const m = String(v).replace(/[^0-9]/g, ""); return m === "" ? NaN : parseInt(m, 10); };
+      const out = [];
+      for (let r = hi + 1; r < rows.length; r++) {
+        const row = rows[r];
+        const name = String(row[cName] ?? "").trim();
+        const count = toInt(row[cCount]);
+        if (!name || !Number.isFinite(count)) continue;
+        const order = cOrder >= 0 && Number.isFinite(toInt(row[cOrder])) ? toInt(row[cOrder]) : out.length + 1;
+        let round = null;
+        if (cRound >= 0) { const rr = toInt(row[cRound]); if (Number.isFinite(rr) && rr >= 1) round = rr; }
+        out.push({ order, name, count, round });
+      }
+      if (!out.length) throw new Error("ไม่พบข้อมูลบัณฑิตในไฟล์");
+      rebuild(out);
+      state.source = "ไฟล์ " + file.name;
+      refreshAll();
+      const noRoundCol = cRound < 0 || out.some(o => o.round == null);
+      st.className = "status";
+      st.innerHTML = `<b>นำเข้าสำเร็จ:</b> ${out.length} สำนักวิชา${noRoundCol ? " · ไม่พบรอบครบทุกแถว จึงจัดรอบอัตโนมัติ" : ""}`;
+      selectTab("ovw");
+    } catch (err) {
+      st.className = "status bad";
+      st.innerHTML = "นำเข้าไม่สำเร็จ: " + err.message;
+    }
+  };
+  reader.onerror = () => { st.className = "status bad"; st.textContent = "อ่านไฟล์ไม่สำเร็จ"; };
+  reader.readAsArrayBuffer(file);
+  ev.target.value = "";
+});
+
+/* ---- เริ่มต้นด้วยข้อมูลตัวอย่าง ---- */
+rebuild(DEFAULT_FACULTIES.map(([name, count], i) => ({ order: i + 1, name, count, round: null })));
+refreshAll();
+$("imp-status").innerHTML = "ยังไม่ได้นำเข้าไฟล์ — ใช้ <b>ข้อมูลตัวอย่าง</b> อยู่";
+</script>
+</body>
+</html>
